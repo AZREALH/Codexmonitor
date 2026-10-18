@@ -104,7 +104,7 @@ stdout 按协议帧增量解析，请求 ID 对应响应；stderr 单独读取�
 |---|---|
 | `QuotaItem` | 稳定列表 ID、额度名称、可选已用比例、可选周期分钟数和重置时间 |
 | `QuotaSnapshot` | 本次额度项目列表与成功查询时间 |
-| `PanelState` | `idle`、`loading`、`loaded(snapshot)` 或 `failed(message)` |
+| `PanelState` | `idle`、`loading`、`loaded(snapshot)` 或 `failed(ReadError)`；界面使用固定错误文案 |
 | `ReadError` | 程序缺失、认证问题、协议不兼容、服务失败、限流或超时；可选重试时刻 |
 
 数据规则：
