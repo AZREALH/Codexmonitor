@@ -2,7 +2,7 @@
 
 一个用于查看 Codex 订阅额度的 macOS 菜单栏面板原型。首版计划支持启动读取、手动刷新和退出；不实现自动监测。
 
-项目已完成 Task1.1 环境验证和 Task1.2 应用壳；Task1.3 菜单栏面板正在人工验收。当前显示开发占位内容，尚未连接 Codex。需求、设计及任务见 [proposal.md](proposal.md)、[design.md](design.md)、[task.md](task.md)。
+项目已完成 Task1.1 环境验证、Task1.2 应用壳和 Task1.3 菜单栏面板。当前显示开发占位内容，尚未连接 Codex。需求、设计及任务见 [proposal.md](proposal.md)、[design.md](design.md)、[task.md](task.md)。
 
 ## 开发环境
 
@@ -90,7 +90,9 @@ swift build --package-path "$task_pkg" --disable-sandbox \
 - XCTest 在实际桌面会话中执行 1 项，0 失败；验证初始收起状态和两次展开／收起。必须初始化测试应用并等待系统布局，不能仅凭测试进程退出码判断通过。
 - 实际 `CodexMonitor --smoke-test` 检查菜单栏展开、收起及标准退出，输出 `SMOKE PASS: menu bar popover opened and closed; terminating normally`，退出码 0。
 - 首次启动检查发现图标尚未完成系统布局，已让检查延迟 0.3 秒后执行；正常运行不受此检查参数影响。
-- 最新预览已通过 macOS 正常应用启动方式运行，等待用户确认图标、按钮、点击外部收起和退出；Task1.3 暂不标记完成。
+- 最新预览通过 macOS 正常应用启动方式运行；用户于 2026-10-18 确认“打开、按钮和收起都正常”，核心交互通过人工验收，Task1.3 已完成。退出流程由自动启动检查验证，不声称另有人工退出验证。
 - 旧桌面版虽曾通过窗口配置测试，用户反馈可点击但不能拖动，因此未通过桌面验收；这些测试已由当前菜单栏行为测试替换。
 
 Codex 路径和订阅额度读取仍未验证。占位面板的“检查交互”按钮用于当前原型验证，后续替换为额度面板功能。
+
+下一步为 Task2.1：定义最小额度数据与比例计算规则，尚未开始。
