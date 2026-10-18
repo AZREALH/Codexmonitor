@@ -39,8 +39,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var panel: MenuBarPanel?
     let model: PanelModel
     private var hasStarted = false
+    private(set) var terminationTask: Task<Void, Never>?
+    private var isReadyToTerminate = false
+    private let replyToTermination: (Bool) -> Void
 
-    init(model: PanelModel) { self.model = model; super.init() }
+    init(model: PanelModel, replyToTermination: @escaping (Bool) -> Void = {
+        if $0 { NSApp.terminate(nil) }
+    }) {
+        self.model = model
+        self.replyToTermination = replyToTermination
+        super.init()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if isReadyToTerminate { return .terminateNow }
+        // 先取消本次退出，让主队列继续清理；完成后重新请求退出。
+        // terminateLater 的嵌套事件循环可能阻塞 MainActor 任务。
+        if terminationTask == nil {
+            terminationTask = Task {
+                await model.stop()
+                panel?.shutdown()
+                isReadyToTerminate = true
+                replyToTermination(true)
+            }
+        }
+        return .terminateCancel
+    }
 
     func startOnce() {
         guard !hasStarted else { return }

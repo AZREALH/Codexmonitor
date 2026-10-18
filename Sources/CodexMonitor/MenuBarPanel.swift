@@ -8,6 +8,7 @@ final class MenuBarPanel: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private var globalClickMonitor: Any?
     private var localClickMonitor: Any?
+    private var isShutdown = false
     var isShown: Bool { popover.isShown }
 
     init(model: PanelModel) {
@@ -34,6 +35,7 @@ final class MenuBarPanel: NSObject, NSPopoverDelegate {
     }
 
     @objc func toggle() {
+        guard !isShutdown else { return }
         if popover.isShown {
             close()
         } else if let button = statusItem.button {
@@ -45,6 +47,14 @@ final class MenuBarPanel: NSObject, NSPopoverDelegate {
     func close() {
         popover.performClose(nil)
         stopClickMonitoring()
+    }
+
+    func shutdown() {
+        guard !isShutdown else { return }
+        isShutdown = true
+        close()
+        statusItem.isVisible = false
+        NSStatusBar.system.removeStatusItem(statusItem)
     }
 
     func popoverDidClose(_ notification: Notification) {

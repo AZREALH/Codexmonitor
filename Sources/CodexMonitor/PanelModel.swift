@@ -13,6 +13,7 @@ enum PanelState: Equatable {
 @Observable
 final class PanelModel {
     private(set) var state: PanelState = .idle
+    private(set) var isStopped = false
     @ObservationIgnored private(set) var refreshTask: Task<Void, Never>?
     private let read: @Sendable () async throws -> QuotaSnapshot
     private let now: () -> Date
@@ -24,6 +25,7 @@ final class PanelModel {
     }
 
     var canRefresh: Bool {
+        guard !isStopped else { return false }
         if case .loading = state { return false }
         if case .failed(let error) = state, let retryAt = error.retryAt {
             return now() >= retryAt
@@ -37,9 +39,22 @@ final class PanelModel {
         state = .loading // 状态里不再携带旧快照，失败也不会显示旧额度。
         refreshTask = Task {
             defer { refreshTask = nil }
-            do { state = .loaded(try await read()) }
-            catch let error as ReadError { state = .failed(error) }
-            catch { state = .failed(.serviceUnavailable) }
+            do {
+                let snapshot = try await read()
+                if !isStopped { state = .loaded(snapshot) }
+            } catch let error as ReadError {
+                if !isStopped { state = .failed(error) }
+            } catch {
+                if !isStopped { state = .failed(.serviceUnavailable) }
+            }
         }
+    }
+
+    func stop() async {
+        // 先拒绝新刷新和迟到结果，再取消并等待读取器完成进程清理。
+        isStopped = true
+        let task = refreshTask
+        task?.cancel()
+        await task?.value
     }
 }
