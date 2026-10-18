@@ -9,6 +9,9 @@ final class AppShellTests: XCTestCase {
         app.setActivationPolicy(.accessory)
         app.finishLaunching()
         let panel = MenuBarPanel(model: PanelModel(read: { throw ReadError.serviceUnavailable }))
+        // 测试宿主可能创建隐藏项；明确初始状态，并在结束时回收图标和监听。
+        panel.statusItem.isVisible = true
+        defer { panel.shutdown() }
         // 让系统完成菜单栏布局，再检查真实面板的展开和收起。
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         XCTAssertFalse(panel.isShown)
