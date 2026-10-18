@@ -38,6 +38,7 @@ enum ReadError: Error, LocalizedError, Equatable, Sendable {
     case serviceUnavailable
     case rateLimited(retryAt: Date?)
     case timeout
+    case cleanupFailed
 
     var retryAt: Date? {
         if case let .rateLimited(retryAt) = self { return retryAt }
@@ -52,6 +53,7 @@ enum ReadError: Error, LocalizedError, Equatable, Sendable {
         case .serviceUnavailable: "暂时无法读取额度，请检查网络后重试。"
         case .rateLimited: "查询受到限流，请稍后重试。"
         case .timeout: "读取额度超时，请稍后重试。"
+        case .cleanupFailed: "未能确认读取进程已退出，请退出应用后重试。"
         }
     }
 }

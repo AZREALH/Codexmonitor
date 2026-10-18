@@ -6,6 +6,7 @@ actor CodexSession {
     enum SessionError: Error, Equatable {
         case launchFailed, disconnected, invalidMessage
         case server(code: Int)
+        case service(ReadError)
     }
 
     private let process = Process()
@@ -79,6 +80,11 @@ actor CodexSession {
         await close()
     }
 
+    func notify(_ method: String) throws {
+        guard process.isRunning, !closing else { throw SessionError.disconnected }
+        try send(["method": method, "params": [:] as [String: String]])
+    }
+
     private func send(_ message: [String: Any]) throws {
         var data = try JSONSerialization.data(withJSONObject: message)
         data.append(0x0A)
@@ -101,7 +107,9 @@ actor CodexSession {
                 guard let id = message["id"] as? Int, let waiter = pending[id] else { continue }
                 if let error = message["error"] as? [String: Any] {
                     pending.removeValue(forKey: id)
-                    waiter.resume(throwing: SessionError.server(code: error["code"] as? Int ?? -32603))
+                    let failure = ServiceFailure.classify(error).map { SessionError.service($0) }
+                        ?? .server(code: error["code"] as? Int ?? -32603)
+                    waiter.resume(throwing: failure)
                 } else if let result = message["result"] {
                     let data = try JSONSerialization.data(withJSONObject: result, options: .fragmentsAllowed)
                     pending.removeValue(forKey: id)
