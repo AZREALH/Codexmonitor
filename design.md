@@ -72,7 +72,7 @@ flowchart LR
 
 stdout 按协议帧增量解析，请求 ID 对应响应；stderr 单独读取，避免管道阻塞，不输出原文。首版不订阅额度变化通知；协议中可能到达的无关通知应安全忽略，不将其误认作请求响应。未知服务端请求按协议返回不支持，不执行工具或授权操作。
 
-当前接口方向参考：[OpenAI Codex App Server 文档](https://learn.chatgpt.com/docs/app-server)。本机路径、版本、认证复用和字段映射尚待验证。
+当前接口方向参考：[OpenAI Codex App Server 文档](https://learn.chatgpt.com/docs/app-server)。Task3.1 已验证本机 CLI 0.162.0-alpha.17.2、已有订阅认证复用及一次真实额度读取；路径和最小消息顺序见 README。协议按换行分隔 JSON，初始化响应后发送 initialized，再检查账户并读取额度。正式客户端与错误路径尚待后续任务实现。
 
 ### 2.4 运行约束
 

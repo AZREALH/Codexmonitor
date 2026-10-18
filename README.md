@@ -93,9 +93,9 @@ swift build --package-path "$task_pkg" --disable-sandbox \
 - 最新预览通过 macOS 正常应用启动方式运行；用户于 2026-10-18 确认“打开、按钮和收起都正常”，核心交互通过人工验收，Task1.3 已完成。退出流程由自动启动检查验证，不声称另有人工退出验证。
 - 旧桌面版虽曾通过窗口配置测试，用户反馈可点击但不能拖动，因此未通过桌面验收；这些测试已由当前菜单栏行为测试替换。
 
-Codex 路径和订阅额度读取仍未验证。占位面板的“检查交互”按钮用于当前原型验证，后续替换为额度面板功能。
+以上为 Task1.3 当时的验证记录。当前已在 Task3.1 验证 Codex 路径和真实读取，菜单栏界面已由 Task2.2 替换为示例额度面板。
 
-Task2.1 已完成数据与计算规则，下一步为 Task2.2：展示额度面板；尚未接入真实读取。
+Task2.1 已完成数据与计算规则；Task2.2 展示面板随后完成。Task3.1 验证真实读取，界面尚未接入。
 
 ### 菜单栏面板收起修正（待复验）
 
@@ -129,7 +129,7 @@ Task2.1 已完成数据与计算规则，下一步为 Task2.2：展示额度面�
 - 构建成功，现有 6 项数据／菜单栏 XCTest 通过，实际启动展开收起检查通过。用户于 2026-10-18 确认“四种场景和刷新都正常”，布局、滚动与刷新人工验收通过；退出回调已接线，未单独记录用户退出验证。
 - 新版已启动在菜单栏，所有 Task2.2 改动保留未暂存、未提交。
 
-Task2.2 已完成，改动仍未暂存、未提交。下一项为 Task3.1：验证本机 Codex 只读额度协议，尚未开始。
+Task2.2 及单实例修复已提交为 `b77e4c2`。Task3.1 已完成真实读取验证，下一项为 Task3.2：解析协议消息帧。
 
 ## 重复菜单栏图标修正
 
@@ -138,3 +138,40 @@ Task2.2 已完成，改动仍未暂存、未提交。下一项为 Task3.1：验�
 验证：8 项 XCTest（含 2 项单实例测试）全部通过；真实进程持锁后连续启动另外 3 次均被拒绝，首实例仍运行；结束首实例后重新启动及展开收起检查成功。最新预览已正常启动。改动附必要中文注释，未暂存、未提交。
 
 以后预览更新先退出已运行的本项目应用，再替换并启动；日常启动使用 `open .build/Preview/CodexMonitor.app`，不使用强制多开参数。
+
+## Task3.1 本机只读协议验证
+
+2026-10-18，通过已有订阅登录完成一次真实额度查询。查询来自临时探测进程，应用界面仍为示例数据。
+
+| 项目 | 实测结果 |
+|---|---|
+| Codex 路径 | `/Users/shihanxi/.vscode-insiders/extensions/openai.chatgpt-26.1007.21434-darwin-arm64/bin/macos-aarch64/codex` |
+| 版本 | `codex-cli 0.162.0-alpha.17.2` |
+| 来源 | VS Code Insiders 的 Codex 扩展附带；扩展升级可能改变路径，不要求另装 CLI |
+| 启动 | `codex app-server --listen stdio://`，临时目录作为工作目录，stderr 与 stdout 分离 |
+| 传输 | 每行一条 JSON，换行分帧，响应按 id 匹配；本次忽略 2 条通知 |
+| 认证 | `account/read` 返回账户类型 chatgpt，复用已有登录 |
+| 额度 | 1 个额度桶，主／次窗口均有有效非负已用比例；周期分钟数和重置时间戳均为整数 |
+| 时间 | 启动至额度读取共 2.622 秒，低于整次 20 秒截止时间 |
+| 清理 | 本次 PID 51772 已回收，进程组另行检查无存活进程 |
+
+### 已验证的最小消息顺序
+
+依据 [OpenAI 官方 App Server 文档](https://learn.chatgpt.com/docs/app-server)，以下消息已在上述本机版本实际验证，不需要开启实验能力：
+
+```json
+{"id":1,"method":"initialize","params":{"clientInfo":{"name":"codex_monitor_probe","title":"Codex Monitor Probe","version":"0.1.0"}}}
+{"method":"initialized","params":{}}
+{"id":2,"method":"account/read","params":{"refreshToken":false}}
+{"id":3,"method":"account/rateLimits/read","params":{}}
+```
+
+按顺序等待每个请求成功，初始化响应后发送 initialized，再检查订阅身份，再查询额度。没有调用登录／登出、Token 获取、thread/start、turn/start 或积分消费接口。应用不主动读取认证文件或强制刷新凭据；认证加载和网络认证由 Codex 自身完成。
+
+本次额度响应包含 rateLimits 和 rateLimitsByLimitId，另有首版不用的 accountId、ordinaryUsageAllowed、rateLimitResetCredits、rateLimitUpsell。后续忽略未使用字段，不将账户标识或响应正文写入日志。
+
+[字段示例](docs/fixtures/rate-limits.example.json) 仅保留所需结构，所有额度桶 ID、百分比、周期和时间均为人为构造，**不是实际账号额度或完整真实响应**。主／次窗口使用 usedPercent、windowDurationMins 和 resetsAt；多桶视图与兼容单桶视图不重复展示。
+
+临时脚本位于 `/private/tmp/codex-monitor-task31.py`，少于 100 行，使用本机 Python 3.9 的 asyncio.wait_for 设置整次截止时间，结束后回收专用进程。未保存原始认证或额度响应；不维护第二套正式客户端。此次只验证成功路径，异常、分片及正式客户端由后续任务实现。
+
+本任务文档及构造样例未暂存、未提交。

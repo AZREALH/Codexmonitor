@@ -1,0 +1,35 @@
+{
+  "id": 3,
+  "result": {
+    "rateLimits": {
+      "limitId": "example",
+      "limitName": null,
+      "primary": {
+        "usedPercent": 25,
+        "windowDurationMins": 300,
+        "resetsAt": 1800000000
+      },
+      "secondary": {
+        "usedPercent": 80,
+        "windowDurationMins": 10080,
+        "resetsAt": 1800086400
+      }
+    },
+    "rateLimitsByLimitId": {
+      "example": {
+        "limitId": "example",
+        "limitName": null,
+        "primary": {
+          "usedPercent": 25,
+          "windowDurationMins": 300,
+          "resetsAt": 1800000000
+        },
+        "secondary": {
+          "usedPercent": 80,
+          "windowDurationMins": 10080,
+          "resetsAt": 1800086400
+        }
+      }
+    }
+  }
+}
