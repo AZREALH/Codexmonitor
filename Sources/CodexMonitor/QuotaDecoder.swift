@@ -32,7 +32,8 @@ struct QuotaDecoder {
                     resetsAt: number(window["resetsAt"]).map { Date(timeIntervalSince1970: $0) }))
             }
         }
-        return QuotaSnapshot(items: items, queriedAt: queriedAt)
+        return QuotaSnapshot(items: items, queriedAt: queriedAt,
+                             resetCredits: ResetCredits(json: root["rateLimitResetCredits"]))
     }
 
     private func number(_ value: Any?) -> Double? {

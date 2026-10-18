@@ -96,5 +96,7 @@ final class CodexReaderTests: XCTestCase {
         XCTAssertTrue(snapshot.items.allSatisfy { $0.usedPercent != nil })
         await assertReaped(session)
         print("LIVE PASS: windows=\(snapshot.items.count); child process reaped; raw data omitted")
+        // 仅记录字段可用性，不打印卡片 ID、描述或完整账户响应。
+        print("LIVE reset credits: count=\(snapshot.resetCredits?.availableCount.map(String.init) ?? "unknown"); details=\(snapshot.resetCredits?.credits?.count.description ?? "unknown")")
     }
 }

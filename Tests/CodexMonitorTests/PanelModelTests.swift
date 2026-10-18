@@ -42,6 +42,7 @@ final class PanelModelTests: XCTestCase {
         XCTAssertEqual(model.state, .loading)
         XCTAssertFalse(model.canRefresh)
         model.refresh()
+        model.refreshOnOpen()
         await source.waitUntilStarted()
         let calls = await source.calls
         XCTAssertEqual(calls, 1)
@@ -84,6 +85,7 @@ final class PanelModelTests: XCTestCase {
         now = retryAt.addingTimeInterval(-1)
         XCTAssertFalse(model.canRefresh)
         model.refresh()
+        model.refreshOnOpen()
         let blockedCalls = await source.calls
         XCTAssertEqual(blockedCalls, 1)
         now = retryAt
@@ -107,5 +109,70 @@ final class PanelModelTests: XCTestCase {
         model.refresh()
         await model.refreshTask?.value
         XCTAssertEqual(model.state, .failed(.serviceUnavailable))
+    }
+
+    @MainActor
+    func testOpenRefreshBoundaryRetainsSnapshotAndRejectsDuplicateReads() async {
+        let source = ControlledRead()
+        var now = snapshot.queriedAt
+        let model = PanelModel(read: { try await source.read() }, now: { now })
+        model.refresh()
+        await source.waitUntilStarted()
+        await source.finish(.success(snapshot))
+        await model.refreshTask?.value
+        for seconds in [0.0, 59, 60] {
+            now = snapshot.queriedAt.addingTimeInterval(seconds)
+            model.refreshOnOpen()
+            XCTAssertNil(model.refreshTask)
+        }
+        now = snapshot.queriedAt.addingTimeInterval(61)
+        model.refreshOnOpen()
+        XCTAssertEqual(model.state, .loaded(snapshot)) // 旧额度与查询时间保持可见。
+        XCTAssertTrue(model.isRefreshing)
+        XCTAssertFalse(model.canRefresh)
+        model.refreshOnOpen()
+        model.refresh()
+        await source.waitUntilStarted()
+        let calls = await source.calls
+        XCTAssertEqual(calls, 2)
+        await source.finish(.success(snapshot))
+        await model.refreshTask?.value
+        XCTAssertFalse(model.isRefreshing)
+        model.refreshOnOpen()
+        XCTAssertNil(model.refreshTask) // 成功后重新开始计算一分钟。
+        model.refresh() // 手动操作不受一分钟新鲜度限制。
+        await source.waitUntilStarted()
+        await source.finish(.success(snapshot))
+        await model.refreshTask?.value
+        await model.stop()
+        now = now.addingTimeInterval(61)
+        model.refreshOnOpen()
+        XCTAssertNil(model.refreshTask)
+    }
+
+    @MainActor
+    func testFailedOpenRefreshClearsOldDataAndWaitsForRateLimit() async {
+        let source = ControlledRead()
+        var now = snapshot.queriedAt
+        let model = PanelModel(read: { try await source.read() }, now: { now })
+        model.refresh()
+        await source.waitUntilStarted()
+        await source.finish(.success(snapshot))
+        await model.refreshTask?.value
+        now = now.addingTimeInterval(61)
+        let retryAt = now.addingTimeInterval(120)
+        model.refreshOnOpen()
+        await source.waitUntilStarted()
+        await source.finish(.failure(ReadError.rateLimited(retryAt: retryAt)))
+        await model.refreshTask?.value
+        XCTAssertEqual(model.state, .failed(.rateLimited(retryAt: retryAt)))
+        model.refreshOnOpen()
+        XCTAssertNil(model.refreshTask)
+        now = retryAt
+        XCTAssertNil(model.refreshTask) // 时间到达本身不会发起读取。
+        model.refreshOnOpen()
+        await source.waitUntilStarted()
+        await source.finish(.success(snapshot))
+        await model.refreshTask?.value
     }
 }

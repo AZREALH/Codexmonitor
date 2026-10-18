@@ -28,6 +28,7 @@ struct QuotaItem: Identifiable, Equatable, Sendable {
 struct QuotaSnapshot: Equatable, Sendable {
     let items: [QuotaItem]
     let queriedAt: Date
+    var resetCredits: ResetCredits? = nil
 }
 
 // 固定错误文案不回显底层响应，避免把认证信息带到界面上。

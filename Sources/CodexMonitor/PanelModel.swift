@@ -14,9 +14,11 @@ enum PanelState: Equatable {
 final class PanelModel {
     private(set) var state: PanelState = .idle
     private(set) var isStopped = false
+    private(set) var isRefreshing = false
     @ObservationIgnored private(set) var refreshTask: Task<Void, Never>?
     private let read: @Sendable () async throws -> QuotaSnapshot
     private let now: () -> Date
+    private var lastSuccessfulRead: Date?
 
     init(read: @escaping @Sendable () async throws -> QuotaSnapshot,
          now: @escaping () -> Date = Date.init) {
@@ -25,7 +27,7 @@ final class PanelModel {
     }
 
     var canRefresh: Bool {
-        guard !isStopped else { return false }
+        guard !isStopped, !isRefreshing else { return false }
         if case .loading = state { return false }
         if case .failed(let error) = state, let retryAt = error.retryAt {
             return now() >= retryAt
@@ -34,20 +36,39 @@ final class PanelModel {
     }
 
     func refresh() {
-        // 按钮禁用之外，入口也防重复；限流到期只允许手动操作，不自动查询。
+        beginRefresh(keepingSnapshot: false)
+    }
+
+    func refreshOnOpen() {
+        // 只在实际展开时检查，不使用定时器；成功读取后 60 秒内复用数据。
+        if let date = lastSuccessfulRead, now().timeIntervalSince(date) <= 60 { return }
+        beginRefresh(keepingSnapshot: true)
+    }
+
+    private func beginRefresh(keepingSnapshot: Bool) {
+        // 手动和展开刷新共享入口，读取中、退出后及限流等待期均拒绝请求。
         guard refreshTask == nil, canRefresh else { return }
-        state = .loading // 状态里不再携带旧快照，失败也不会显示旧额度。
+        isRefreshing = true
+        if !keepingSnapshot || !hasSnapshot { state = .loading }
         refreshTask = Task {
-            defer { refreshTask = nil }
+            defer { refreshTask = nil; isRefreshing = false }
             do {
                 let snapshot = try await read()
-                if !isStopped { state = .loaded(snapshot) }
+                if !isStopped {
+                    state = .loaded(snapshot)
+                    lastSuccessfulRead = now()
+                }
             } catch let error as ReadError {
                 if !isStopped { state = .failed(error) }
             } catch {
                 if !isStopped { state = .failed(.serviceUnavailable) }
             }
         }
+    }
+
+    private var hasSnapshot: Bool {
+        if case .loaded = state { return true }
+        return false
     }
 
     func stop() async {

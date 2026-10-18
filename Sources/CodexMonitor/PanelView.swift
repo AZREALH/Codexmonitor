@@ -6,12 +6,18 @@ struct PanelView: View {
     let isExample: Bool
     let onRefresh: () -> Void
     let onQuit: () -> Void
+    var isRefreshing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Codex Monitor").font(.headline)
                 Spacer()
+                if isRefreshing {
+                    // 自动刷新保留旧内容和查询时间，用小标识说明正在更新。
+                    ProgressView().controlSize(.small)
+                    Text("正在更新…").font(.caption).foregroundStyle(.secondary)
+                }
                 if isExample {
                     Text("示例数据")
                         .font(.caption.bold())
@@ -29,6 +35,7 @@ struct PanelView: View {
                     ForEach(snapshot.items) { item in
                         quotaRow(item)
                     }
+                    ResetCreditsView(credits: snapshot.resetCredits)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -37,6 +44,7 @@ struct PanelView: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Button("刷新", action: onRefresh)
+                    .disabled(isRefreshing)
                 Spacer()
                 Button("退出", action: onQuit)
             }
@@ -47,7 +55,8 @@ struct PanelView: View {
 
     private func quotaRow(_ item: QuotaItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title(for: item)).font(.subheadline.bold()).fixedSize(horizontal: false, vertical: true)
+            Text(title(for: item)).font(.system(size: 18, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
             if let remaining = item.remainingPercent {
                 Text("剩余 \(remaining.formatted(.number.precision(.fractionLength(0...1))))%")
                     .monospacedDigit()

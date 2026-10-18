@@ -9,9 +9,11 @@ final class MenuBarPanel: NSObject, NSPopoverDelegate {
     private var globalClickMonitor: Any?
     private var localClickMonitor: Any?
     private var isShutdown = false
+    private let model: PanelModel
     var isShown: Bool { popover.isShown }
 
     init(model: PanelModel) {
+        self.model = model
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
         popover.contentSize = NSSize(width: 380, height: 440)
@@ -40,6 +42,7 @@ final class MenuBarPanel: NSObject, NSPopoverDelegate {
             close()
         } else if let button = statusItem.button {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            if popover.isShown { model.refreshOnOpen() }
             startClickMonitoring()
         }
     }

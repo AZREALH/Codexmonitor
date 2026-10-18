@@ -1,6 +1,6 @@
 import SwiftUI
 
-// 界面随 model.state 切换；展开面板或视图重建都不发起查询。
+// 视图只展示状态；展开时的刷新由菜单栏入口决定，视图重建不发起查询。
 struct LivePanelView: View {
     let model: PanelModel
     let onQuit: () -> Void
@@ -11,7 +11,8 @@ struct LivePanelView: View {
             Group {
                 if case .loaded(let snapshot) = model.state {
                     PanelView(snapshot: snapshot, isExample: false,
-                              onRefresh: model.refresh, onQuit: onQuit)
+                              onRefresh: model.refresh, onQuit: onQuit,
+                              isRefreshing: model.isRefreshing)
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Codex Monitor").font(.headline)
