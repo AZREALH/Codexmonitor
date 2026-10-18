@@ -1,8 +1,8 @@
 # Codex Monitor
 
-一个用于查看 Codex 订阅额度的 macOS 桌面面板原型。首版计划支持启动读取、手动刷新和退出；不实现自动监测。
+一个用于查看 Codex 订阅额度的 macOS 菜单栏面板原型。首版计划支持启动读取、手动刷新和退出；不实现自动监测。
 
-项目已完成 Task1.1 环境验证和 Task1.2 应用壳。当前可以启动一个普通占位窗口，尚未连接 Codex，也未设置桌面层级。需求、设计及任务见 [proposal.md](proposal.md)、[design.md](design.md)、[task.md](task.md)。
+项目已完成 Task1.1 环境验证和 Task1.2 应用壳；Task1.3 菜单栏面板正在人工验收。当前显示开发占位内容，尚未连接 Codex。需求、设计及任务见 [proposal.md](proposal.md)、[design.md](design.md)、[task.md](task.md)。
 
 ## 开发环境
 
@@ -44,7 +44,9 @@ swift test
 swift run CodexMonitor
 ```
 
-窗口显示“开发占位”，没有额度数据。通过应用菜单“退出 Codex Monitor”、Command-Q 或关闭最后一个窗口退出。此阶段仍使用命令启动，不是双击 `.app`。
+启动后屏幕上方菜单栏出现仪表盘图标，悬停显示“Codex Monitor”。点击展开占位面板，点击“检查交互”可增加次数；点击外部或再次点击图标收起，应用继续运行。点击面板内“退出”结束应用。不显示 Dock 图标或独立桌面窗口，不支持拖动。
+
+本机临时预览包位于 `.build/Preview/CodexMonitor.app`，可用 `open .build/Preview/CodexMonitor.app` 打开；这是当前验证产物，干净克隆后尚无一键打包步骤，正式构建交付留待 Task5.1。
 
 受限代理环境下，需将 SwiftPM 与编译器缓存放到允许写入的位置。本次临时工程验证使用：
 
@@ -80,4 +82,15 @@ swift build --package-path "$task_pkg" --disable-sandbox \
 - 受限代理内使用上一节的缓存重定向参数执行 `swift test`，构建及测试通过。完整 GUI 启动在受限环境中超过 15 秒，测试已结束该子进程；在允许访问桌面会话的环境中两次启动退出均成功。
 - 本次没有连接 Codex、创建额度缓存或安装应用。窗口可见性由实际 AppKit 状态检查，尚未进行人工视觉审查或桌面层级验证。
 
-下一步为 Task1.3：实现并验证仅桌面可见的窗口行为。Codex 路径与订阅额度读取仍未验证。
+## Task1.3 菜单栏面板验证记录
+
+用户在桌面版排查后提出改为类似系统电池的交互，项目已切换方向：菜单栏图标加点击展开面板，停止桌面层级和拖动实现。
+
+- `MenuBarPanel.swift` 使用 `NSStatusItem` 和 `NSPopover`；点击图标切换展开／收起，点击外部自动收起；不显示 Dock 图标。
+- XCTest 在实际桌面会话中执行 1 项，0 失败；验证初始收起状态和两次展开／收起。必须初始化测试应用并等待系统布局，不能仅凭测试进程退出码判断通过。
+- 实际 `CodexMonitor --smoke-test` 检查菜单栏展开、收起及标准退出，输出 `SMOKE PASS: menu bar popover opened and closed; terminating normally`，退出码 0。
+- 首次启动检查发现图标尚未完成系统布局，已让检查延迟 0.3 秒后执行；正常运行不受此检查参数影响。
+- 最新预览已通过 macOS 正常应用启动方式运行，等待用户确认图标、按钮、点击外部收起和退出；Task1.3 暂不标记完成。
+- 旧桌面版虽曾通过窗口配置测试，用户反馈可点击但不能拖动，因此未通过桌面验收；这些测试已由当前菜单栏行为测试替换。
+
+Codex 路径和订阅额度读取仍未验证。占位面板的“检查交互”按钮用于当前原型验证，后续替换为额度面板功能。

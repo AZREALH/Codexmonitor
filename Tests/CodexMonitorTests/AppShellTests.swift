@@ -4,20 +4,24 @@ import XCTest
 
 final class AppShellTests: XCTestCase {
     @MainActor
-    func testShowingAgainReusesTheVisibleWindow() {
-        _ = NSApplication.shared
-        let delegate = AppDelegate()
-        delegate.showWindow()
-        guard let first = delegate.window else {
-            XCTFail("Window was not created")
-            return
-        }
-        defer { first.close() }
-        delegate.showWindow()
-        XCTAssertTrue(delegate.window === first)
-        XCTAssertTrue(first.isVisible)
-        XCTAssertTrue(first.title.contains("开发占位"))
-        XCTAssertNotNil(first.contentView)
-        XCTAssertTrue(delegate.applicationShouldTerminateAfterLastWindowClosed(NSApp))
+    func testPanelStartsClosedAndCanBeToggledRepeatedly() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        app.finishLaunching()
+        let panel = MenuBarPanel()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertFalse(panel.isShown)
+        panel.toggle()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertTrue(panel.isShown)
+        panel.toggle()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertFalse(panel.isShown)
+        panel.toggle()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertTrue(panel.isShown)
+        panel.toggle()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertFalse(panel.isShown)
     }
 }
