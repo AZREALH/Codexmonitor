@@ -15,9 +15,13 @@ actor CodexSession {
     private var nextID = 0
     private var pending: [Int: CheckedContinuation<Data, Error>] = [:]
     private var reader: Task<Void, Never>?
+    private var closing = false
+    private var cleanup: Task<Bool, Never>?
+    var processID: Int32 { process.processIdentifier }
+    var hasPendingRequests: Bool { !pending.isEmpty }
 
     func start(executable: URL, arguments: [String]) throws {
-        guard reader == nil else { throw SessionError.launchFailed }
+        guard reader == nil, !closing else { throw SessionError.launchFailed }
         process.executableURL = executable
         process.arguments = arguments
         process.standardInput = input
@@ -27,30 +31,52 @@ actor CodexSession {
         // 对端提前退出时让写入抛错，不让 SIGPIPE 终止整个应用。
         guard fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1) != -1
         else { throw SessionError.launchFailed }
+        let descriptor = output.fileHandleForReading.fileDescriptor
+        guard fcntl(descriptor, F_SETFL, fcntl(descriptor, F_GETFL) | O_NONBLOCK) != -1
+        else { throw SessionError.launchFailed }
         do { try process.run() } catch { throw SessionError.launchFailed }
-        let handle = output.fileHandleForReading
-        reader = Task.detached { [weak self] in
-            while true {
-                let chunk = handle.availableData
-                if chunk.isEmpty { break }
-                // 读取已有数据后立即交给分帧器，不等凑满固定长度才处理。
-                await self?.receive(chunk)
+        reader = Task.detached { [weak self, process] in
+            var bytes = [UInt8](repeating: 0, count: 4096)
+            while !Task.isCancelled {
+                let count = Darwin.read(descriptor, &bytes, bytes.count)
+                if count > 0 {
+                    await self?.receive(Data(bytes.prefix(count)))
+                } else if count == 0 || !process.isRunning || (errno != EAGAIN && errno != EINTR) {
+                    break
+                } else {
+                    // 非阻塞读取可取消，不会卡在没有数据的管道上。
+                    try? await Task.sleep(for: .milliseconds(10))
+                }
             }
-            await self?.reachedEOF()
+            if !Task.isCancelled { await self?.reachedEOF() }
         }
     }
 
     func request(_ method: String, params: Data = Data("{}".utf8)) async throws -> Data {
-        guard process.isRunning else { throw SessionError.disconnected }
+        guard process.isRunning, !closing else { throw SessionError.disconnected }
         let parameters = try JSONSerialization.jsonObject(with: params)
         nextID += 1
         let id = nextID
-        return try await withCheckedThrowingContinuation { continuation in
-            // 先登记等待者，再发送，避免很快的响应找不到请求。
-            pending[id] = continuation
-            do { try send(["id": id, "method": method, "params": parameters]) }
-            catch { pending.removeValue(forKey: id)?.resume(throwing: error) }
+        do {
+            return try await withTaskCancellationHandler {
+                try Task.checkCancellation()
+                return try await withCheckedThrowingContinuation { continuation in
+                    pending[id] = continuation
+                    do { try send(["id": id, "method": method, "params": parameters]) }
+                    catch { pending.removeValue(forKey: id)?.resume(throwing: error) }
+                }
+            } onCancel: {
+                Task { await self.cancelRequests() }
+            }
+        } catch {
+            if Task.isCancelled { await close(); throw CancellationError() }
+            throw error
         }
+    }
+
+    private func cancelRequests() async {
+        fail(CancellationError())
+        await close()
     }
 
     private func send(_ message: [String: Any]) throws {
@@ -60,6 +86,7 @@ actor CodexSession {
     }
 
     private func receive(_ chunk: Data) {
+        guard !closing else { return }
         do {
             for frame in try framer.append(chunk) {
                 guard let message = try JSONSerialization.jsonObject(with: frame) as? [String: Any]
@@ -81,12 +108,13 @@ actor CodexSession {
                     waiter.resume(returning: data)
                 } else { throw SessionError.invalidMessage }
             }
-        } catch { fail(error) }
+        } catch { fail(error); Task { await close() } }
     }
 
     private func reachedEOF() {
         do { try framer.finish(); fail(SessionError.disconnected) }
         catch { fail(error) }
+        Task { await close() }
     }
 
     private func fail(_ error: Error) {
@@ -95,11 +123,33 @@ actor CodexSession {
         for waiter in waiters { waiter.resume(throwing: error) }
     }
 
-    // 当前提供局部测试所需的基本关闭；有界取消和强制回收由 Task3.4 补齐。
-    func close() {
-        try? input.fileHandleForWriting.close()
-        if process.isRunning { process.terminate(); process.waitUntilExit() }
-        reader?.cancel()
+    // 共享同一个清理任务：重复关闭和并发取消不会重复发送信号。
+    @discardableResult
+    func close() async -> Bool {
+        if let cleanup { return await cleanup.value }
+        closing = true
         fail(SessionError.disconnected)
+        reader?.cancel()
+        let task = Task { [process, input, output, reader] in
+            try? input.fileHandleForWriting.close()
+            await reader?.value
+            // 依次等待正常退出、普通终止和强制终止，每阶段最多约 0.2 秒。
+            for stage in 0..<3 {
+                if process.isRunning {
+                    if stage == 1 { process.terminate() }
+                    if stage == 2 { kill(process.processIdentifier, SIGKILL) }
+                }
+                for _ in 0..<20 {
+                    if !process.isRunning { break }
+                    try? await Task.sleep(for: .milliseconds(10))
+                }
+            }
+            try? output.fileHandleForReading.close()
+            try? output.fileHandleForWriting.close()
+            try? input.fileHandleForReading.close()
+            return !process.isRunning
+        }
+        cleanup = task
+        return await task.value
     }
 }
