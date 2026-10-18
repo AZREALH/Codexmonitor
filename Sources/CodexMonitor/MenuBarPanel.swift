@@ -13,12 +13,12 @@ final class MenuBarPanel: NSObject, NSPopoverDelegate {
     override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
-        popover.contentSize = NSSize(width: 360, height: 240)
+        popover.contentSize = NSSize(width: 380, height: 440)
         popover.animates = false
         popover.delegate = self
         // 统一由图标和点击监听关闭，避免系统先收起、图标回调又重新打开。
         popover.behavior = .applicationDefined
-        popover.contentViewController = NSHostingController(rootView: PlaceholderView())
+        popover.contentViewController = NSHostingController(rootView: ExamplePanelView())
         if let button = statusItem.button {
             let image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent",
                                 accessibilityDescription: "Codex Monitor")

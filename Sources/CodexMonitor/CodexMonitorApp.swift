@@ -5,11 +5,23 @@ import AppKit
 enum CodexMonitorApp {
     @MainActor
     static func main() {
+        let instance: SingleInstance
+        do {
+            guard let acquired = try SingleInstance() else {
+                print("Codex Monitor 已在运行，不重复启动。")
+                return
+            }
+            instance = acquired
+        } catch {
+            print("无法检查应用运行状态，请检查临时目录权限。")
+            return
+        }
         let application = NSApplication.shared
         let delegate = AppDelegate()
         application.delegate = delegate
         application.setActivationPolicy(.accessory)
-        withExtendedLifetime(delegate) { application.run() }
+        // 应用运行期间持续持锁，退出后才能启动下一份。
+        withExtendedLifetime((delegate, instance)) { application.run() }
     }
 }
 
