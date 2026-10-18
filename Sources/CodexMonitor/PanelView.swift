@@ -47,7 +47,7 @@ struct PanelView: View {
 
     private func quotaRow(_ item: QuotaItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(item.name).font(.subheadline.bold()).fixedSize(horizontal: false, vertical: true)
+            Text(title(for: item)).font(.subheadline.bold()).fixedSize(horizontal: false, vertical: true)
             if let remaining = item.remainingPercent {
                 Text("剩余 \(remaining.formatted(.number.precision(.fractionLength(0...1))))%")
                     .monospacedDigit()
@@ -58,9 +58,6 @@ struct PanelView: View {
                 // 未知比例不画进度条，避免被误解为 0% 或仍在加载。
                 Text("剩余：暂无数据").foregroundStyle(.secondary)
             }
-            if let minutes = item.windowDurationMins {
-                Text("额度周期：\(minutes) 分钟").font(.caption)
-            }
             Text(item.resetsAt.map {
                 "重置时间：\($0.formatted(date: .numeric, time: .shortened))"
             } ?? "重置时间：暂无数据")
@@ -68,5 +65,23 @@ struct PanelView: View {
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func title(for item: QuotaItem) -> String {
+        // 隐藏默认 codex 前缀，其他额度组的名称仍保留，便于区分。
+        let prefix = "codex · "
+        let name = item.name.lowercased().hasPrefix(prefix)
+            ? String(item.name.dropFirst(prefix.count)) : item.name
+        // 按服务实际返回的周期命名，不固定认为主窗口一定是五小时。
+        let label: String
+        switch item.windowDurationMins {
+        case 300: label = "5h"
+        case 10080: label = "Weekly"
+        default: return name
+        }
+        for suffix in ["主窗口", "次窗口"] where name.hasSuffix(suffix) {
+            return String(name.dropLast(suffix.count)) + label
+        }
+        return "\(name) · \(label)"
     }
 }

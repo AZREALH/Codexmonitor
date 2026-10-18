@@ -17,7 +17,16 @@ enum CodexMonitorApp {
             return
         }
         let application = NSApplication.shared
-        let delegate = AppDelegate()
+        // 首版使用 Task3.1 验证的本机路径；扩展升级后可在此集中调整。
+        let reader = CodexReader(executable: URL(fileURLWithPath:
+            "/Users/shihanxi/.vscode-insiders/extensions/openai.chatgpt-26.1007.21434-darwin-arm64/bin/macos-aarch64/codex"))
+        let model = PanelModel(read: {
+            if CommandLine.arguments.contains("--smoke-test") {
+                return QuotaSnapshot(items: [], queriedAt: Date())
+            }
+            return try await reader.readSnapshot()
+        })
+        let delegate = AppDelegate(model: model)
         application.delegate = delegate
         application.setActivationPolicy(.accessory)
         // 应用运行期间持续持锁，退出后才能启动下一份。
@@ -28,9 +37,20 @@ enum CodexMonitorApp {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var panel: MenuBarPanel?
+    let model: PanelModel
+    private var hasStarted = false
+
+    init(model: PanelModel) { self.model = model; super.init() }
+
+    func startOnce() {
+        guard !hasStarted else { return }
+        hasStarted = true
+        model.refresh()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        panel = MenuBarPanel()
+        panel = MenuBarPanel(model: model)
+        startOnce() // 只在应用启动时调用，不放在视图的 onAppear 中。
         // 检查模式会打开、收起面板，然后正常退出；日常启动不执行。
         if CommandLine.arguments.contains("--smoke-test") {
             // 等待系统把菜单栏按钮放到屏幕上，再打开弹出面板。

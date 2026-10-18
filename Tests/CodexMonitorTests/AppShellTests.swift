@@ -8,7 +8,7 @@ final class AppShellTests: XCTestCase {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         app.finishLaunching()
-        let panel = MenuBarPanel()
+        let panel = MenuBarPanel(model: PanelModel(read: { throw ReadError.serviceUnavailable }))
         // 让系统完成菜单栏布局，再检查真实面板的展开和收起。
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         XCTAssertFalse(panel.isShown)
