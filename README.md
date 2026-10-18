@@ -2,7 +2,7 @@
 
 一个用于查看 Codex 订阅额度的 macOS 菜单栏面板原型。首版计划支持启动读取、手动刷新和退出；不实现自动监测。
 
-项目已实现至 Task4.3，菜单栏面板已接入真实 Codex 订阅额度，支持启动读取、手动刷新及退出时取消清理；用户已确认数据显示和刷新正常。Task4.3 的人工退出验收已通过，菜单栏 XCTest 回归仍有失败，详见文末记录。需求、设计及任务见 [proposal.md](proposal.md)、[design.md](design.md)、[task.md](task.md)。
+项目已实现至 Task5.1（本机应用包人工验收通过），菜单栏面板已接入真实 Codex 订阅额度，支持启动读取、手动刷新及退出时取消清理；用户已确认数据显示和刷新正常。Task4.3 的人工退出验收已通过，菜单栏 XCTest 回归仍有失败，详见文末记录。需求、设计及任务见 [proposal.md](proposal.md)、[design.md](design.md)、[task.md](task.md)。
 
 ## 开发环境
 
@@ -34,7 +34,7 @@ swift package --version
 
 ## 构建路径
 
-首版选择 **Swift Package Manager 可执行工程 + SwiftUI / AppKit**，不引入第三方依赖或工程生成工具。已建立 `Package.swift`、源码和 XCTest 测试入口；Task5.1 再生成本机可启动的 `.app`。当前部署配置为 macOS 27.0，实际仅在 27.0.1 验证。
+首版选择 **Swift Package Manager 可执行工程 + SwiftUI / AppKit**，不引入第三方依赖或工程生成工具。当前部署配置为 macOS 27.0，实际仅在 27.0.1 验证。
 
 在当前项目目录的普通终端中运行：
 
@@ -46,7 +46,18 @@ swift run CodexMonitor
 
 启动后屏幕上方菜单栏出现仪表盘图标，悬停显示“Codex Monitor”，后台读取一次真实额度。点击图标展开面板，显示剩余比例、进度条、重置及查询时间；点击“刷新”重新查询，加载时按钮禁用，失败显示错误。点击外部或再次点击图标收起，收起和再展开不重复查询。点击面板内“退出”结束应用。不显示 Dock 图标或独立桌面窗口，不支持拖动或自动刷新。
 
-本机临时预览包位于 `.build/Preview/CodexMonitor.app`，可用 `open .build/Preview/CodexMonitor.app` 打开；这是当前验证产物，干净克隆后尚无一键打包步骤，正式构建交付留待 Task5.1。
+日常使用推荐构建本机应用包（需要已安装的 Xcode／Swift 工具链）：
+
+```sh
+./scripts/build-app.sh
+open build/CodexMonitor.app
+```
+
+也可在 Finder 中打开项目的 `build` 文件夹，双击 `CodexMonitor.app`。更新构建前先从旧面板点击“退出”；同时存在旧预览时，单实例机制会阻止新版重复启动。旧 `.build/Preview` 仅供历史开发检查，日常使用以上固定产物。
+
+脚本从独立的 `.build/app-build` 构建目录生成 Release 可执行程序，补齐 Info.plist，进行本机 ad-hoc 签名后生成 `build/CodexMonitor.app`；构建目录和产物都已被 Git 忽略。脚本可重复执行，也可从其他目录使用绝对路径调用。当前只支持本机架构，未提供公证或面向其他 Mac 的发布包。
+
+应用使用 `CodexMonitorApp.swift` 中集中配置的 Codex 绝对路径及当前用户已有订阅登录，直接从 Finder 启动无需 shell PATH。扩展更新导致路径变化时，修改该路径并重新打包；不会将 Codex 或账号凭据复制进应用包。
 
 受限代理环境下，需将 SwiftPM 与编译器缓存放到允许写入的位置。本次临时工程验证使用：
 
@@ -304,3 +315,11 @@ Task4.1 已提交为 `80ec4f3`。新增 `LivePanelView.swift`，根据 PanelMode
 2026-10-18 新增 3 项退出测试通过，覆盖空闲／错误／读取中停止、迟到结果不写回、重复退出及忽略 SIGTERM 的专用子进程回收。最终全套执行 42 项，1 项真实账户测试默认跳过；原 AppShellTests 菜单栏展开有 5 个断言失败，其余测试通过，失败原因尚未确定。没有为此修改原测试，也不声明全套回归通过。
 
 真实可执行程序连续两次通过展开、收起及正常退出检查，均输出 SMOKE PASS、退出码 0，退出后可再次启动。用户已确认刷新期间点击退出后“图标消失，正常退出”，此项人工验收通过。新增实现与测试约 150 行，含简洁中文注释；未暂存、未提交。
+
+## Task5.1 本机应用打包
+
+新增 47 行 `scripts/build-app.sh`，必要注释解释目录、应用信息及签名。正式产物为 `build/CodexMonitor.app`，无需搬动或保留临时 Preview 包。构建不安装应用、不修改登录项，不复制账号凭据。
+
+2026-10-18 首次从新的 `.build/app-build` 目录完成 Release 构建；第二次从 `/private/tmp` 使用脚本绝对路径成功复建。Info.plist 校验、ad-hoc 签名验证、本机 arm64 检查及 Git 忽略检查通过。通过 `open -W` 从 LaunchServices 启动正式包，展开／收起及正常退出输出 SMOKE PASS，随后正式包已正常启动供真实额度与退出人工验收。
+
+本次未修改 Swift 运行逻辑，未重复执行全套 XCTest；Task4.3 记录的菜单栏 XCTest 失败仍保留，不能据此宣称整体验收完成。用户已确认正式应用包“真实额度正常，退出后图标消失”，Task5.1 人工验收通过；改动未暂存、未提交。
